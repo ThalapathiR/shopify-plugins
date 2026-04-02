@@ -1,0 +1,14 @@
+app/shopify.server.ts(18,3): error TS2322: Type 'PrismaSessionStorage<PrismaClient<PrismaClientOptions, never, DefaultArgs>>' is not assignable to type 'SessionStorage'.
+  Types of property 'storeSession' are incompatible.
+    Type '(session: import("D:/shopify_app/ai-call-app/node_modules/@shopify/shopify-api/dist/ts/lib/session/session").Session) => Promise<boolean>' is not assignable to type '(session: import("D:/shopify_app/ai-call-app/node_modules/@shopify/shopify-app-react-router/node_modules/@shopify/shopify-api/dist/ts/lib/session/session").Session) => Promise<...>'.
+      Types of parameters 'session' and 'session' are incompatible.
+        Type 'import("D:/shopify_app/ai-call-app/node_modules/@shopify/shopify-app-react-router/node_modules/@shopify/shopify-api/dist/ts/lib/session/session").Session' is not assignable to type 'import("D:/shopify_app/ai-call-app/node_modules/@shopify/shopify-api/dist/ts/lib/session/session").Session'.
+          Types of property 'isActive' are incompatible.
+            Type '(scopes: string | string[] | import("D:/shopify_app/ai-call-app/node_modules/@shopify/shopify-app-react-router/node_modules/@shopify/shopify-api/dist/ts/lib/auth/scopes/index").AuthScopes | undefined, withinMillisecondsOfExpiry?: number | undefined) => boolean' is not assignable to type '(scopes: string | string[] | import("D:/shopify_app/ai-call-app/node_modules/@shopify/shopify-api/dist/ts/lib/auth/scopes/index").AuthScopes | undefined, withinMillisecondsOfExpiry?: number | undefined) => boolean'.
+              Types of parameters 'scopes' and 'scopes' are incompatible.
+                Type 'string | string[] | import("D:/shopify_app/ai-call-app/node_modules/@shopify/shopify-api/dist/ts/lib/auth/scopes/index").AuthScopes | undefined' is not assignable to type 'string | string[] | import("D:/shopify_app/ai-call-app/node_modules/@shopify/shopify-app-react-router/node_modules/@shopify/shopify-api/dist/ts/lib/auth/scopes/index").AuthScopes | undefined'.
+                  Type 'AuthScopes' is not assignable to type 'string | string[] | AuthScopes | undefined'.
+                    Type 'import("D:/shopify_app/ai-call-app/node_modules/@shopify/shopify-api/dist/ts/lib/auth/scopes/index").AuthScopes' is not assignable to type 'import("D:/shopify_app/ai-call-app/node_modules/@shopify/shopify-app-react-router/node_modules/@shopify/shopify-api/dist/ts/lib/auth/scopes/index").AuthScopes'.
+                      Types have separate declarations of a private property 'compressedScopes'.
+app/shopify.server.ts(43,15): error TS2339: Property 'webhooks' does not exist on type 'ShopifyAppBase<AppConfigArg<SessionStorage, { expiringOfflineAccessTokens: true; }>> & ShopifyAppLogin & { ...; }'.
+app/shopify.server.ts(44,3): error TS18004: No value exists in scope for the shorthand property 'session'. Either declare one or provide an initializer.
