@@ -1,345 +1,155 @@
 import { useEffect } from "react";
-import type {
-  ActionFunctionArgs,
-  HeadersFunction,
-  LoaderFunctionArgs,
-} from "react-router";
-import { useFetcher } from "react-router";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
+import { useFetcher, useLoaderData } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
-import { boundary } from "@shopify/shopify-app-react-router/server";
+import { Page, Layout, Card, Text, BlockStack, TextField, Button, Banner, InlineStack, Box } from "@shopify/polaris";
+import { useState } from "react";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await authenticate.admin(request);
-
-  return null;
+  return { 
+    defaultPhone: "+919384293940",
+  };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { admin } = await authenticate.admin(request);
-  const color = ["Red", "Orange", "Yellow", "Green"][
-    Math.floor(Math.random() * 4)
-  ];
-  const response = await admin.graphql(
-    `#graphql
-      mutation populateProduct($product: ProductCreateInput!) {
-        productCreate(product: $product) {
-          product {
-            id
-            title
-            handle
-            status
-            variants(first: 10) {
-              edges {
-                node {
-                  id
-                  price
-                  barcode
-                  createdAt
-                }
-              }
-            }
-            demoInfo: metafield(namespace: "$app", key: "demo_info") {
-              jsonValue
-            }
+  const formData = await request.formData();
+  const actionType = formData.get("actionType") as string;
+
+  if (actionType === "injectScript") {
+      try {
+          const adminAny = admin as any;
+          const themes = await adminAny.rest.get({ path: "themes" }) as any;
+          const mainTheme = themes.data.themes.find((t: any) => t.role === "main");
+          
+          if (!mainTheme) return { success: false, error: "Main theme not found" };
+
+          const scriptContent = `
+            <script>
+            (function() {
+                document.addEventListener('DOMContentLoaded', function() {
+                    setTimeout(() => {
+                        const customerId = window.ShopifyAnalytics?.meta?.customer?.id;
+                        const cartToken = document.cookie.match(/(^|;)\\s*cart=([^;]+)/)?.[2];
+                        
+                        if (customerId && cartToken) {
+                            fetch('/apps/ai-call/api/proxy?cart_token=' + cartToken + '&customer_id=' + customerId + '&shop=' + Shopify.shop)
+                            .then(() => console.log('✅ AI Call Handshake success'))
+                            .catch(err => console.log('❌ Handshake failed'));
+                        }
+                    }, 2000);
+                });
+            })();
+            </script>
+          `;
+
+          await adminAny.rest.put({
+              path: `themes/${mainTheme.id}/assets`,
+              body: { asset: { key: "snippets/ai-call-handshake.liquid", value: scriptContent } }
+          });
+
+          const themeLiquid = await adminAny.rest.get({ path: `themes/${mainTheme.id}/assets`, query: { "asset[key]": "layout/theme.liquid" } }) as any;
+          let content = themeLiquid.data.asset.value;
+
+          if (!content.includes("{% render 'ai-call-handshake' %}")) {
+              content = content.replace("</body>", "{% render 'ai-call-handshake' %}\\n</body>");
+              await adminAny.rest.put({
+                  path: `themes/${mainTheme.id}/assets`,
+                  body: { asset: { key: "layout/theme.liquid", value: content } }
+              });
           }
-        }
-      }`,
-    {
-      variables: {
-        product: {
-          title: `${color} Snowboard`,
-          metafields: [
-            {
-              namespace: "$app",
-              key: "demo_info",
-              value: "Created by React Router Template",
-            },
-          ],
-        },
-      },
-    },
-  );
-  const responseJson = await response.json();
 
-  const product = responseJson.data!.productCreate!.product!;
-  const variantId = product.variants.edges[0]!.node!.id!;
-
-  const variantResponse = await admin.graphql(
-    `#graphql
-    mutation shopifyReactRouterTemplateUpdateVariant($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
-      productVariantsBulkUpdate(productId: $productId, variants: $variants) {
-        productVariants {
-          id
-          price
-          barcode
-          createdAt
-        }
+          return { success: true, message: "Handshake Script Injected!" };
+      } catch (err: any) {
+          return { success: false, error: "Script injection failed: " + err.message };
       }
-    }`,
-    {
-      variables: {
-        productId: product.id,
-        variants: [{ id: variantId, price: "100.00" }],
-      },
-    },
-  );
+  }
 
-  const variantResponseJson = await variantResponse.json();
+  const phone = formData.get("phone") as string;
+  const name = formData.get("name") as string;
 
-  const metaobjectResponse = await admin.graphql(
-    `#graphql
-    mutation shopifyReactRouterTemplateUpsertMetaobject($handle: MetaobjectHandleInput!, $metaobject: MetaobjectUpsertInput!) {
-      metaobjectUpsert(handle: $handle, metaobject: $metaobject) {
-        metaobject {
-          id
-          handle
-          title: field(key: "title") {
-            jsonValue
-          }
-          description: field(key: "description") {
-            jsonValue
-          }
-        }
-        userErrors {
-          field
-          message
-        }
-      }
-    }`,
-    {
-      variables: {
-        handle: {
-          type: "$app:example",
-          handle: "demo-entry",
-        },
-        metaobject: {
-          fields: [
-            { key: "title", value: "Demo Entry" },
-            {
-              key: "description",
-              value:
-                "This metaobject was created by the Shopify app template to demonstrate the metaobject API.",
-            },
-          ],
-        },
-      },
-    },
-  );
+  try {
+    const response = await fetch("http://127.0.0.1:5000/api/test-call", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone, customer_name: name }),
+    });
 
-  const metaobjectResponseJson = await metaobjectResponse.json();
-
-  return {
-    product: responseJson!.data!.productCreate!.product,
-    variant:
-      variantResponseJson!.data!.productVariantsBulkUpdate!.productVariants,
-    metaobject:
-      metaobjectResponseJson!.data!.metaobjectUpsert!.metaobject,
-  };
+    const data = await response.json();
+    return { success: data.success, error: data.error };
+  } catch (err: any) {
+    return { success: false, error: "Backend not reachable. Ensure server.js is running." };
+  }
 };
 
 export default function Index() {
+  const { defaultPhone } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
-
   const shopify = useAppBridge();
-  const isLoading =
-    ["loading", "submitting"].includes(fetcher.state) &&
-    fetcher.formMethod === "POST";
+  
+  const [phone, setPhone] = useState(defaultPhone);
+  const [name, setName] = useState("Gokul Test");
+
+  const isLoading = fetcher.state !== "idle";
+  const isSuccess = fetcher.data?.success;
+  const error = fetcher.data?.error;
 
   useEffect(() => {
-    if (fetcher.data?.product?.id) {
-      shopify.toast.show("Product created");
+    if (isSuccess) {
+      shopify.toast.show("Success!");
+    } else if (error) {
+      shopify.toast.show(`Error: ${error}`);
     }
-  }, [fetcher.data?.product?.id, shopify]);
-
-  const generateProduct = () => fetcher.submit({}, { method: "POST" });
+  }, [isSuccess, error, shopify]);
 
   return (
-    <s-page heading="Shopify app template">
-      <s-button slot="primary-action" onClick={generateProduct}>
-        Generate a product
-      </s-button>
+    <Page title="AI Call Center - Dashboard">
+      <Layout>
+        <Layout.Section>
+          <BlockStack gap="500">
+            <Banner title="AI Call Status" tone="info">
+              <p>Follow the steps below to verify your AI voice calling system.</p>
+            </Banner>
 
-      <s-section heading="Congrats on creating a new Shopify app 🎉">
-        <s-paragraph>
-          This embedded app template uses{" "}
-          <s-link
-            href="https://shopify.dev/docs/apps/tools/app-bridge"
-            target="_blank"
-          >
-            App Bridge
-          </s-link>{" "}
-          interface examples like an{" "}
-          <s-link href="/app/additional">additional page in the app nav</s-link>
-          , as well as an{" "}
-          <s-link
-            href="https://shopify.dev/docs/api/admin-graphql"
-            target="_blank"
-          >
-            Admin GraphQL
-          </s-link>{" "}
-          mutation demo, to provide a starting point for app development.
-        </s-paragraph>
-      </s-section>
-      <s-section heading="Get started with products">
-        <s-paragraph>
-          Generate a product with GraphQL and get the JSON output for that
-          product. Learn more about the{" "}
-          <s-link
-            href="https://shopify.dev/docs/api/admin-graphql/latest/mutations/productCreate"
-            target="_blank"
-          >
-            productCreate
-          </s-link>{" "}
-          mutation in our API references. Includes a product{" "}
-          <s-link
-            href="https://shopify.dev/docs/apps/build/custom-data/metafields"
-            target="_blank"
-          >
-            metafield
-          </s-link>{" "}
-          and{" "}
-          <s-link
-            href="https://shopify.dev/docs/apps/build/custom-data/metaobjects"
-            target="_blank"
-          >
-            metaobject
-          </s-link>
-          .
-        </s-paragraph>
-        <s-stack direction="inline" gap="base">
-          <s-button
-            onClick={generateProduct}
-            {...(isLoading ? { loading: true } : {})}
-          >
-            Generate a product
-          </s-button>
-          {fetcher.data?.product && (
-            <s-button
-              onClick={() => {
-                shopify.intents.invoke?.("edit:shopify/Product", {
-                  value: fetcher.data?.product?.id,
-                });
-              }}
-              target="_blank"
-              variant="tertiary"
-            >
-              Edit product
-            </s-button>
-          )}
-        </s-stack>
-        {fetcher.data?.product && (
-          <s-section heading="productCreate mutation">
-            <s-stack direction="block" gap="base">
-              <s-box
-                padding="base"
-                borderWidth="base"
-                borderRadius="base"
-                background="subdued"
-              >
-                <pre style={{ margin: 0 }}>
-                  <code>{JSON.stringify(fetcher.data.product, null, 2)}</code>
-                </pre>
-              </s-box>
+            <Card>
+              <BlockStack gap="400">
+                <Text as="h2" variant="headingMd">🤝 Step 1: Enable Tracking</Text>
+                <Text as="p">Link your storefront customer profiles to avoid "Anonymous" calls.</Text>
+                <InlineStack align="end">
+                  <Button variant="primary" 
+                    loading={isLoading && fetcher.formData?.get("actionType") === "injectScript"}
+                    onClick={() => fetcher.submit({ actionType: "injectScript" }, { method: "POST" })}>
+                    ✨ Enable Storefront Tracking
+                  </Button>
+                </InlineStack>
+              </BlockStack>
+            </Card>
 
-              <s-heading>productVariantsBulkUpdate mutation</s-heading>
-              <s-box
-                padding="base"
-                borderWidth="base"
-                borderRadius="base"
-                background="subdued"
-              >
-                <pre style={{ margin: 0 }}>
-                  <code>{JSON.stringify(fetcher.data.variant, null, 2)}</code>
-                </pre>
-              </s-box>
+            <Card>
+              <BlockStack gap="400">
+                <Text as="h2" variant="headingMd">🛠️ Step 2: Trigger a Test Call</Text>
+                <Box paddingBlockStart="200">
+                  <BlockStack gap="400">
+                    <TextField label="Phone Number" value={phone} onChange={setPhone} />
+                    <TextField label="Name" value={name} onChange={setName} />
+                    <InlineStack align="end">
+                      <Button variant="primary" loading={isLoading} 
+                        onClick={() => fetcher.submit({ phone, name }, { method: "POST" })}>
+                        🚀 Trigger Test Call
+                      </Button>
+                    </InlineStack>
+                  </BlockStack>
+                </Box>
+              </BlockStack>
+            </Card>
 
-              <s-heading>metaobjectUpsert mutation</s-heading>
-              <s-box
-                padding="base"
-                borderWidth="base"
-                borderRadius="base"
-                background="subdued"
-              >
-                <pre style={{ margin: 0 }}>
-                  <code>
-                    {JSON.stringify(fetcher.data.metaobject, null, 2)}
-                  </code>
-                </pre>
-              </s-box>
-            </s-stack>
-          </s-section>
-        )}
-      </s-section>
-
-      <s-section slot="aside" heading="App template specs">
-        <s-paragraph>
-          <s-text>Framework: </s-text>
-          <s-link href="https://reactrouter.com/" target="_blank">
-            React Router
-          </s-link>
-        </s-paragraph>
-        <s-paragraph>
-          <s-text>Interface: </s-text>
-          <s-link
-            href="https://shopify.dev/docs/api/app-home/using-polaris-components"
-            target="_blank"
-          >
-            Polaris web components
-          </s-link>
-        </s-paragraph>
-        <s-paragraph>
-          <s-text>API: </s-text>
-          <s-link
-            href="https://shopify.dev/docs/api/admin-graphql"
-            target="_blank"
-          >
-            GraphQL
-          </s-link>
-        </s-paragraph>
-        <s-paragraph>
-          <s-text>Custom data: </s-text>
-          <s-link
-            href="https://shopify.dev/docs/apps/build/custom-data"
-            target="_blank"
-          >
-            Metafields &amp; metaobjects
-          </s-link>
-        </s-paragraph>
-        <s-paragraph>
-          <s-text>Database: </s-text>
-          <s-link href="https://www.prisma.io/" target="_blank">
-            Prisma
-          </s-link>
-        </s-paragraph>
-      </s-section>
-
-      <s-section slot="aside" heading="Next steps">
-        <s-unordered-list>
-          <s-list-item>
-            Build an{" "}
-            <s-link
-              href="https://shopify.dev/docs/apps/getting-started/build-app-example"
-              target="_blank"
-            >
-              example app
-            </s-link>
-          </s-list-item>
-          <s-list-item>
-            Explore Shopify&apos;s API with{" "}
-            <s-link
-              href="https://shopify.dev/docs/apps/tools/graphiql-admin-api"
-              target="_blank"
-            >
-              GraphiQL
-            </s-link>
-          </s-list-item>
-        </s-unordered-list>
-      </s-section>
-    </s-page>
+            {isSuccess && <Banner title="Call Success!" tone="success" />}
+            {error && <Banner title="Error" tone="critical"><p>{error}</p></Banner>}
+          </BlockStack>
+        </Layout.Section>
+      </Layout>
+    </Page>
   );
 }
-
-export const headers: HeadersFunction = (headersArgs) => {
-  return boundary.headers(headersArgs);
-};

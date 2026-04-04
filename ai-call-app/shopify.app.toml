@@ -24,9 +24,21 @@ api_version = "2026-04"
   topics = [ "orders/create" ]
   uri = "/webhooks/orders/create"
 
+  [[webhooks.subscriptions]]
+  topics = [ "refunds/create" ]
+  uri = "/webhooks/refunds/create"
+
+  [[webhooks.subscriptions]]
+  topics = [ "carts/create", "carts/update" ]
+  uri = "/webhooks/carts/update"
+
+  [[webhooks.subscriptions]]
+  topics = [ "checkouts/create", "checkouts/update" ]
+  uri = "/webhooks/checkouts/create"
+
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "read_orders,write_orders,write_metaobject_definitions,write_metaobjects,write_products"
+scopes = "read_orders,write_orders,write_metaobject_definitions,write_metaobjects,write_products,read_customers"
 
 
 
@@ -57,3 +69,8 @@ required = true
 [metaobjects.app.example.fields.description]
 name = "Description"
 type = "multi_line_text_field"
+
+[app_proxy]
+url = "https://example.com/api/proxy"
+subpath = "ai-call"
+prefix = "apps"
